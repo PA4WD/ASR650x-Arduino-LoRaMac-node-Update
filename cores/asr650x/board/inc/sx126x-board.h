@@ -47,6 +47,11 @@ void SX126xIoIrqInit( DioIrqHandler dioIrq );
 void SX126xIoDeInit( void );
 
 /*!
+ * \brief Initializes the TCXO power pin.
+ */
+void SX126xIoTcxoInit( void );
+
+/*!
  * \brief HW Reset of the radio
  */
 void SX126xReset( void );
@@ -77,7 +82,7 @@ void SX126xWriteCommand( RadioCommands_t opcode, uint8_t *buffer, uint16_t size 
  * \param [out] buffer        Buffer holding data from the radio
  * \param [in]  size          Size of the buffer
  */
-void SX126xReadCommand( RadioCommands_t opcode, uint8_t *buffer, uint16_t size );
+uint8_t SX126xReadCommand( RadioCommands_t opcode, uint8_t *buffer, uint16_t size );
 
 /*!
  * \brief Write a single byte of data to the radio memory
@@ -115,6 +120,13 @@ uint8_t SX126xGetPaSelect( uint32_t channel );
  * \brief Initializes the RF Switch I/Os pins interface
  */
 void SX126xAntSwOn( void );
+
+/*!
+ * \brief Gets the device ID
+ *
+ * \retval id Connected device ID
+ */
+uint8_t SX126xGetDeviceId( void );
 
 /*!
  * \brief De-initializes the RF Switch I/Os pins interface

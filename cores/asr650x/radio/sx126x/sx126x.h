@@ -20,10 +20,13 @@
  *
  * \author    Gregory Cristian ( Semtech )
  */
-
-
 #ifndef __SX126x_H__
 #define __SX126x_H__
+
+#ifdef __cplusplus
+extern "C"
+{
+#endif
 
 #include <stdint.h>
 #include <stdbool.h>
@@ -34,11 +37,6 @@
 
 #define SX1261                                      1
 #define SX1262                                      2
-
-
-#ifdef __cplusplus
-extern "C" {
-#endif
 
 /*!
  * Radio complete Wake-up Time with margin for temperature compensation
@@ -145,10 +143,10 @@ typedef union RadioStatus_u
     uint8_t Value;
     struct
     {   //bit order is lsb -> msb
-        uint8_t Reserved  : 1;  //!< Reserved
+        uint8_t           : 1;  //!< Reserved
         uint8_t CmdStatus : 3;  //!< Command status
         uint8_t ChipMode  : 3;  //!< Chip mode
-        uint8_t CpuBusy   : 1;  //!< Flag for CPU radio busy
+        uint8_t           : 1;  //!< Reserved
     }Fields;
 }RadioStatus_t;
 
@@ -650,7 +648,7 @@ typedef union
         uint8_t ImgCalib                : 1;                    //!< Image calibration failed
         uint8_t XoscStart               : 1;                    //!< XOSC oscillator failed to start
         uint8_t PllLock                 : 1;                    //!< PLL lock failed
-        uint8_t BuckStart               : 1;                    //!< Buck converter failed to start
+        uint8_t                         : 1;                    //!< Buck converter failed to start
         uint8_t PaRamp                  : 1;                    //!< PA ramp failed
         uint8_t                         : 7;                    //!< Reserved
     }Fields;
@@ -676,7 +674,7 @@ typedef struct SX126x_s
 /*!
  * Hardware IO IRQ callback function definition
  */
-typedef void ( DioIrqHandler )( void );
+typedef void ( DioIrqHandler )( void* context );
 
 /*!
  * SX126x definitions
@@ -719,19 +717,25 @@ typedef struct
 /*!
  * \brief Initializes the radio driver
  */
-int SX126xInit( DioIrqHandler dioIrq );
+void SX126xInit( DioIrqHandler dioIrq );
 
 /*!
- * \brief Gets the current Operation Mode of the Radio
+ * \brief Gets the current Radio OperationMode variable
  *
  * \retval      RadioOperatingModes_t last operating mode
  */
 RadioOperatingModes_t SX126xGetOperatingMode( void );
+
 /*!
- * \brief Sets the current Operation Mode of the Radio
- * 
+ * \brief Sets/Updates the current Radio OperationMode variable.
+ *
+ * \remark WARNING: This function is only required to reflect the current radio
+ *                  operating mode when processing interrupts.
+ *
+ * \param [in] mode           New operating mode
  */
-void SX126xSetOperatingMode(RadioOperatingModes_t mode);
+void SX126xSetOperatingMode( RadioOperatingModes_t mode );
+
 /*!
  * \brief Wakeup the radio if it is in Sleep mode and check that Busy is low
  */
@@ -1119,5 +1123,3 @@ void SX126xClearIrqStatus( uint16_t irq );
 #endif
 
 #endif // __SX126x_H__
-
-

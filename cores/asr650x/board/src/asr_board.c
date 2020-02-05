@@ -48,6 +48,16 @@ uint8_t gPaOptSetting = 0;
 static uint32_t gBaudRate = STDIO_UART_BAUDRATE;
 char gChipId[17];
 
+void BoardCriticalSectionBegin( uint32_t *mask )
+{
+    CyGlobalIntDisable;
+}
+
+void BoardCriticalSectionEnd( uint32_t *mask )
+{
+    CyGlobalIntEnable;
+}
+
 void SX126xIoInit( void )
 {
     GpioInit( &SX126x.Spi.Nss, RADIO_NSS, OUTPUT, PIN_PUSH_PULL, PIN_PULL_UP, 1 );
@@ -65,6 +75,17 @@ void SX126xIoDeInit( void )
     GpioInit( &SX126x.Spi.Nss, RADIO_NSS, ANALOG, PIN_PUSH_PULL, PIN_PULL_UP, 1 );
     GpioInit( &SX126x.BUSY, RADIO_BUSY, ANALOG, PIN_PUSH_PULL, PIN_NO_PULL, 0 );
     GpioInit( &SX126x.DIO1, RADIO_DIO_1, ANALOG, PIN_PUSH_PULL, PIN_NO_PULL, 0 );
+}
+
+void SX126xIoTcxoInit( void )
+{
+    if(UseTCXO) {
+        CalibrationParams_t calibParam;
+
+        SX126xSetDio3AsTcxoCtrl( TCXO_CTRL_1_8V, SX126xGetBoardTcxoWakeupTime( ) << 6 ); // convert from ms to SX126x time base
+        calibParam.Value = 0x7F;
+        SX126xCalibrate( calibParam );
+    }
 }
 
 uint32_t SX126xGetBoardTcxoWakeupTime( void )
@@ -125,7 +146,7 @@ void SX126xWriteCommand( RadioCommands_t command, uint8_t *buffer, uint16_t size
     }
 }
 
-void SX126xReadCommand( RadioCommands_t command, uint8_t *buffer, uint16_t size )
+uint8_t SX126xReadCommand( RadioCommands_t command, uint8_t *buffer, uint16_t size )
 {
 
     SX126xCheckDeviceReady( );
@@ -241,6 +262,18 @@ uint8_t SX126xGetPaSelect( uint32_t channel )
 {
     (void)channel;
     return SX1262;
+}
+
+uint8_t SX126xGetDeviceId( void )
+{
+    if( GpioRead( &DeviceSel ) == 1 )
+    {
+        return SX1261;
+    }
+    else
+    {
+        return SX1262;
+    }
 }
 
 uint8_t SX126xGetPaOpt( )

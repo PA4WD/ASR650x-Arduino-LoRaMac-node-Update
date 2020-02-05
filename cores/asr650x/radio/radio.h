@@ -23,6 +23,11 @@
 #ifndef __RADIO_H__
 #define __RADIO_H__
 
+#ifdef __cplusplus
+extern "C"
+{
+#endif
+
 #include <stdint.h>
 #include <stdbool.h>
 
@@ -65,7 +70,7 @@ typedef struct
      * \param [IN] payload Received buffer pointer
      * \param [IN] size    Received buffer size
      * \param [IN] rssi    RSSI value computed while receiving the frame [dBm]
-     * \param [IN] snr     Raw SNR value given by the radio hardware
+     * \param [IN] snr     SNR value computed while receiving the frame [dB]
      *                     FSK : N/A ( set to 0 )
      *                     LoRa: SNR value in dB
      */
@@ -103,7 +108,7 @@ struct Radio_s
      *
      * \param [IN] events Structure containing the driver callback functions
      */
-    int    ( *Init )( RadioEvents_t *events );
+    void    ( *Init )( RadioEvents_t *events );
     /*!
      * Return current radio status
      *
@@ -273,7 +278,7 @@ struct Radio_s
     /*!
      * \brief Start a Channel Activity Detection
      */
-    void    ( *StartCad )( uint8_t symbols );
+    void    ( *StartCad )( void );
     /*!
      * \brief Sets the radio in continuous wave transmission mode
      *
@@ -319,13 +324,6 @@ struct Radio_s
      */
     void    ( *ReadBuffer )( uint16_t addr, uint8_t *buffer, uint8_t size );
     /*!
-     * \brief Set synchro word in radio
-     *
-     * \param [IN] data  THe syncword
-     */		
-		void    ( *SetSyncWord )( uint8_t data );
-    
-	/*!
      * \brief Sets the maximum payload length.
      *
      * \param [IN] modem      Radio modem to be used [0: FSK, 1: LoRa]
@@ -380,5 +378,9 @@ struct Radio_s
  *         board implementation
  */
 extern const struct Radio_s Radio;
+
+#ifdef __cplusplus
+}
+#endif
 
 #endif // __RADIO_H__

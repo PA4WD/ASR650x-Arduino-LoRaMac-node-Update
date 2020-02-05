@@ -1,3 +1,25 @@
+/*!
+ * \file      sx126x.c
+ *
+ * \brief     SX126x driver implementation
+ *
+ * \copyright Revised BSD License, see section \ref LICENSE.
+ *
+ * \code
+ *                ______                              _
+ *               / _____)             _              | |
+ *              ( (____  _____ ____ _| |_ _____  ____| |__
+ *               \____ \| ___ |    (_   _) ___ |/ ___)  _ \
+ *               _____) ) ____| | | || |_| ____( (___| | | |
+ *              (______/|_____)_|_|_| \__)_____)\____)_| |_|
+ *              (C)2013-2017 Semtech
+ *
+ * \endcode
+ *
+ * \author    Miguel Luis ( Semtech )
+ *
+ * \author    Gregory Cristian ( Semtech )
+ */
 #include <string.h>
 #include "utilities.h"
 #include "timer.h"
@@ -18,12 +40,17 @@ typedef struct
 /*!
  * \brief Holds the internal operating mode of the radio
  */
-static volatile RadioOperatingModes_t OperatingMode;
+static RadioOperatingModes_t OperatingMode;
 
 /*!
  * \brief Stores the current packet type set in the radio
  */
 static RadioPacketTypes_t PacketType;
+
+/*!
+ * \brief Stores the current packet header type set in the radio
+ */
+static volatile RadioLoRaPacketLengthsMode_t LoRaHeaderType;
 
 /*!
  * \brief Stores the last frequency error measured on LoRa received packet
@@ -59,37 +86,48 @@ void SX126xSetInterruptMode( void );
  */
 void SX126xProcessIrqs( void );
 
-extern bool UseTCXO;
-extern uint8_t gPaOptSetting;
-int SX126xInit( DioIrqHandler dioIrq )
+void SX126xInit( DioIrqHandler dioIrq )
 {
     SX126xReset( );
- 
+
     SX126xIoIrqInit( dioIrq );
+
     SX126xWakeup( );
     SX126xSetStandby( STDBY_RC );
-    
-    if(UseTCXO) {
-        CalibrationParams_t calibParam;
 
-        SX126xSetDio3AsTcxoCtrl( TCXO_CTRL_1_8V, SX126xGetBoardTcxoWakeupTime( ) << 6 ); // convert from ms to SX126x time base
-        calibParam.Value = 0x7F;
-        SX126xCalibrate( calibParam );
-    }
-    
-    
+    // Initialize TCXO control
+    SX126xIoTcxoInit( );
+
     SX126xSetDio2AsRfSwitchCtrl( true );
-    OperatingMode = MODE_STDBY_RC;
-    return 0;
+    SX126xSetOperatingMode( MODE_STDBY_RC );
 }
 
 RadioOperatingModes_t SX126xGetOperatingMode( void )
 {
     return OperatingMode;
 }
-void SX126xSetOperatingMode(RadioOperatingModes_t mode)
+
+void SX126xSetOperatingMode( RadioOperatingModes_t mode )
 {
-    OperatingMode=mode;
+    OperatingMode = mode;
+#if defined( USE_RADIO_DEBUG )
+    switch( mode )
+    {
+        case MODE_TX:
+            SX126xDbgPinTxWrite( 1 );
+            SX126xDbgPinRxWrite( 0 );
+            break;
+        case MODE_RX:
+        case MODE_RX_DC:
+            SX126xDbgPinTxWrite( 0 );
+            SX126xDbgPinRxWrite( 1 );
+            break;
+        default:
+            SX126xDbgPinTxWrite( 0 );
+            SX126xDbgPinRxWrite( 0 );
+            break;
+    }
+#endif
 }
 
 void SX126xCheckDeviceReady( void )
@@ -129,7 +167,7 @@ void SX126xSendPayload( uint8_t *payload, uint8_t size, uint32_t timeout )
 
 uint8_t SX126xSetSyncWord( uint8_t *syncWord )
 {
-    SX126xWriteRegister(REG_LR_SYNCWORD, *syncWord);
+    SX126xWriteRegisters( REG_LR_SYNCWORDBASEADDRESS, syncWord, 8 );
     return 0;
 }
 
@@ -207,8 +245,11 @@ void SX126xSetSleep( SleepParams_t sleepConfig )
 {
     SX126xAntSwOff( );
 
-    SX126xWriteCommand( RADIO_SET_SLEEP, &sleepConfig.Value, 1 );
-    OperatingMode = MODE_SLEEP;
+    uint8_t value = ( ( ( uint8_t )sleepConfig.Fields.WarmStart << 2 ) |
+                      ( ( uint8_t )sleepConfig.Fields.Reset << 1 ) |
+                      ( ( uint8_t )sleepConfig.Fields.WakeUpRTC ) );
+    SX126xWriteCommand( RADIO_SET_SLEEP, &value, 1 );
+    SX126xSetOperatingMode( MODE_SLEEP );
 }
 
 void SX126xSetStandby( RadioStandbyModes_t standbyConfig )
@@ -216,25 +257,25 @@ void SX126xSetStandby( RadioStandbyModes_t standbyConfig )
     SX126xWriteCommand( RADIO_SET_STANDBY, ( uint8_t* )&standbyConfig, 1 );
     if( standbyConfig == STDBY_RC )
     {
-        OperatingMode = MODE_STDBY_RC;
+        SX126xSetOperatingMode( MODE_STDBY_RC );
     }
     else
     {
-        OperatingMode = MODE_STDBY_XOSC;
+        SX126xSetOperatingMode( MODE_STDBY_XOSC );
     }
 }
 
 void SX126xSetFs( void )
 {
     SX126xWriteCommand( RADIO_SET_FS, 0, 0 );
-    OperatingMode = MODE_FS;
+    SX126xSetOperatingMode( MODE_FS );
 }
 
 void SX126xSetTx( uint32_t timeout )
 {
     uint8_t buf[3];
 
-    OperatingMode = MODE_TX;
+    SX126xSetOperatingMode( MODE_TX );
 
     buf[0] = ( uint8_t )( ( timeout >> 16 ) & 0xFF );
     buf[1] = ( uint8_t )( ( timeout >> 8 ) & 0xFF );
@@ -246,7 +287,7 @@ void SX126xSetRx( uint32_t timeout )
 {
     uint8_t buf[3];
 
-    OperatingMode = MODE_RX;
+    SX126xSetOperatingMode( MODE_RX );
 
     buf[0] = ( uint8_t )( ( timeout >> 16 ) & 0xFF );
     buf[1] = ( uint8_t )( ( timeout >> 8 ) & 0xFF );
@@ -258,7 +299,7 @@ void SX126xSetRxBoosted( uint32_t timeout )
 {
     uint8_t buf[3];
 
-    OperatingMode = MODE_RX;
+    SX126xSetOperatingMode( MODE_RX );
 
     SX126xWriteRegister( REG_RX_GAIN, 0x96 ); // max LNA gain, increase current by ~2mA for around ~3dB in sensivity
 
@@ -279,13 +320,13 @@ void SX126xSetRxDutyCycle( uint32_t rxTime, uint32_t sleepTime )
     buf[4] = ( uint8_t )( ( sleepTime >> 8 ) & 0xFF );
     buf[5] = ( uint8_t )( sleepTime & 0xFF );
     SX126xWriteCommand( RADIO_SET_RXDUTYCYCLE, buf, 6 );
-    OperatingMode = MODE_RX_DC;
+    SX126xSetOperatingMode( MODE_RX_DC );
 }
 
 void SX126xSetCad( void )
 {
     SX126xWriteCommand( RADIO_SET_CAD, 0, 0 );
-    OperatingMode = MODE_CAD;
+    SX126xSetOperatingMode( MODE_CAD );
 }
 
 void SX126xSetTxContinuousWave( void )
@@ -315,7 +356,15 @@ void SX126xSetRegulatorMode( RadioRegulatorMode_t mode )
 
 void SX126xCalibrate( CalibrationParams_t calibParam )
 {
-    SX126xWriteCommand( RADIO_CALIBRATE, ( uint8_t* )&calibParam, 1 );
+    uint8_t value = ( ( ( uint8_t )calibParam.Fields.ImgEnable << 6 ) |
+                      ( ( uint8_t )calibParam.Fields.ADCBulkPEnable << 5 ) |
+                      ( ( uint8_t )calibParam.Fields.ADCBulkNEnable << 4 ) |
+                      ( ( uint8_t )calibParam.Fields.ADCPulseEnable << 3 ) |
+                      ( ( uint8_t )calibParam.Fields.PLLEnable << 2 ) |
+                      ( ( uint8_t )calibParam.Fields.RC13MEnable << 1 ) |
+                      ( ( uint8_t )calibParam.Fields.RC64KEnable ) );
+
+    SX126xWriteCommand( RADIO_CALIBRATE, &value, 1 );
 }
 
 void SX126xCalibrateImage( uint32_t freq )
@@ -330,7 +379,7 @@ void SX126xCalibrateImage( uint32_t freq )
     else if( freq > 850000000 )
     {
         calFreq[0] = 0xD7;
-        calFreq[1] = 0xD8;
+        calFreq[1] = 0xDB;
     }
     else if( freq > 770000000 )
     {
@@ -441,7 +490,7 @@ void SX126xSetTxParams( int8_t power, RadioRampTimes_t rampTime )
 {
     uint8_t buf[2];
 
-    if( SX126xGetPaSelect( 0 ) == SX1261 )
+    if( SX126xGetDeviceId( ) == SX1261 )
     {
         if( power == 15 )
         {
@@ -455,41 +504,27 @@ void SX126xSetTxParams( int8_t power, RadioRampTimes_t rampTime )
         {
             power = 14;
         }
-        else if( power < -3 )
+        else if( power < -17 )
         {
-            power = -3;
+            power = -17;
         }
         SX126xWriteRegister( REG_OCP, 0x18 ); // current max is 80 mA for the whole device
     }
     else // sx1262
-    {        
-        switch(gPaOptSetting) {
-            case 3: { 
-                SX126xSetPaConfig( 0x02, 0x02, 0x00, 0x01 ); 
-                break;
-            }
-            case 2: { 
-                SX126xSetPaConfig( 0x02, 0x03, 0x00, 0x01 ); 
-                break;
-            }
-            case 1: { 
-                SX126xSetPaConfig( 0x03, 0x05, 0x00, 0x01 ); 
-                break;
-            }
-            case 0: 
-            default: { 
-                SX126xSetPaConfig( 0x04, 0x07, 0x00, 0x01 ); 
-                break;
-            }
-        } 
+    {
+        // WORKAROUND - Better Resistance of the SX1262 Tx to Antenna Mismatch, see DS_SX1261-2_V1.2 datasheet chapter 15.2
+        // RegTxClampConfig = @address 0x08D8
+        SX126xWriteRegister( 0x08D8, SX126xReadRegister( 0x08D8 ) | ( 0x0F << 1 ) );
+        // WORKAROUND END
 
+        SX126xSetPaConfig( 0x04, 0x07, 0x00, 0x01 );
         if( power > 22 )
         {
             power = 22;
         }
-        else if( power < -3 )
+        else if( power < -9 )
         {
-            power = -3;
+            power = -9;
         }
         SX126xWriteRegister( REG_OCP, 0x38 ); // current max 160mA for the whole device
     }
@@ -590,7 +625,7 @@ void SX126xSetPacketParams( PacketParams_t *packetParams )
         n = 6;
         buf[0] = ( packetParams->Params.LoRa.PreambleLength >> 8 ) & 0xFF;
         buf[1] = packetParams->Params.LoRa.PreambleLength;
-        buf[2] = packetParams->Params.LoRa.HeaderType;
+        buf[2] = LoRaHeaderType = packetParams->Params.LoRa.HeaderType;
         buf[3] = packetParams->Params.LoRa.PayloadLength;
         buf[4] = packetParams->Params.LoRa.CrcMode;
         buf[5] = packetParams->Params.LoRa.InvertIQ;
@@ -613,8 +648,8 @@ void SX126xSetCadParams( RadioLoRaCadSymbols_t cadSymbolNum, uint8_t cadDetPeak,
     buf[4] = ( uint8_t )( ( cadTimeout >> 16 ) & 0xFF );
     buf[5] = ( uint8_t )( ( cadTimeout >> 8 ) & 0xFF );
     buf[6] = ( uint8_t )( cadTimeout & 0xFF );
-    SX126xWriteCommand( RADIO_SET_CADPARAMS, buf, 5 );
-    OperatingMode = MODE_CAD;
+    SX126xWriteCommand( RADIO_SET_CADPARAMS, buf, 7 );
+    SX126xSetOperatingMode( MODE_CAD );
 }
 
 void SX126xSetBufferBaseAddress( uint8_t txBaseAddress, uint8_t rxBaseAddress )
@@ -629,10 +664,11 @@ void SX126xSetBufferBaseAddress( uint8_t txBaseAddress, uint8_t rxBaseAddress )
 RadioStatus_t SX126xGetStatus( void )
 {
     uint8_t stat = 0;
-    RadioStatus_t status;
+    RadioStatus_t status = { .Value = 0 };
 
-    SX126xReadCommand( RADIO_GET_STATUS, ( uint8_t * )&stat, 1 );
-    status.Value = stat;
+    stat = SX126xReadCommand( RADIO_GET_STATUS, NULL, 0 );
+    status.Fields.CmdStatus = ( stat & ( 0x07 << 1 ) ) >> 1;
+    status.Fields.ChipMode = ( stat & ( 0x07 << 4 ) ) >> 4;
     return status;
 }
 
@@ -654,7 +690,7 @@ void SX126xGetRxBufferStatus( uint8_t *payloadLength, uint8_t *rxStartBufferPoin
 
     // In case of LORA fixed header, the payloadLength is obtained by reading
     // the register REG_LR_PAYLOADLENGTH
-    if( ( SX126xGetPacketType( ) == PACKET_TYPE_LORA ) && ( SX126xReadRegister( REG_LR_PACKETPARAMS ) >> 7 == 1 ) )
+    if( ( SX126xGetPacketType( ) == PACKET_TYPE_LORA ) && ( LoRaHeaderType == LORA_PACKET_FIXED_LENGTH ) )
     {
         *payloadLength = SX126xReadRegister( REG_LR_PAYLOADLENGTH );
     }
@@ -683,7 +719,8 @@ void SX126xGetPacketStatus( PacketStatus_t *pktStatus )
 
         case PACKET_TYPE_LORA:
             pktStatus->Params.LoRa.RssiPkt = -status[0] >> 1;
-            ( status[1] < 128 ) ? ( pktStatus->Params.LoRa.SnrPkt = status[1] >> 2 ) : ( pktStatus->Params.LoRa.SnrPkt = ( ( status[1] - 256 ) >> 2 ) );
+            // Returns SNR value [dB] rounded to the nearest integer value
+            pktStatus->Params.LoRa.SnrPkt = ( ( ( int8_t )status[1] ) + 2 ) >> 2;
             pktStatus->Params.LoRa.SignalRssiPkt = -status[2] >> 1;
             pktStatus->Params.LoRa.FreqError = FrequencyError;
             break;
@@ -700,9 +737,18 @@ void SX126xGetPacketStatus( PacketStatus_t *pktStatus )
 
 RadioError_t SX126xGetDeviceErrors( void )
 {
-    RadioError_t error;
+    uint8_t err[] = { 0, 0 };
+    RadioError_t error = { .Value = 0 };
 
-    SX126xReadCommand( RADIO_GET_ERROR, ( uint8_t * )&error, 2 );
+    SX126xReadCommand( RADIO_GET_ERROR, ( uint8_t* )err, 2 );
+    error.Fields.PaRamp     = ( err[0] & ( 1 << 0 ) ) >> 0;
+    error.Fields.PllLock    = ( err[1] & ( 1 << 6 ) ) >> 6;
+    error.Fields.XoscStart  = ( err[1] & ( 1 << 5 ) ) >> 5;
+    error.Fields.ImgCalib   = ( err[1] & ( 1 << 4 ) ) >> 4;
+    error.Fields.AdcCalib   = ( err[1] & ( 1 << 3 ) ) >> 3;
+    error.Fields.PllCalib   = ( err[1] & ( 1 << 2 ) ) >> 2;
+    error.Fields.Rc13mCalib = ( err[1] & ( 1 << 1 ) ) >> 1;
+    error.Fields.Rc64kCalib = ( err[1] & ( 1 << 0 ) ) >> 0;
     return error;
 }
 
