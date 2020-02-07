@@ -19,6 +19,7 @@
 #include "AT_Command.h"
 #include "Arduino.h"
 
+extern bool IsLoRaMacNetworkJoined;
 extern enum eDeviceState_Lora DeviceState_lora;
 extern uint8_t Lora_TXPW;
 extern uint32_t Lora_SF; 

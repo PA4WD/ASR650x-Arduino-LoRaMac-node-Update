@@ -21,7 +21,7 @@
 #include <HardwareSerial.h>
 
 
-extern uint8_t AppData[LORAWAN_APP_DATA_MAX_SIZE];
+extern uint8_t AppDataBuffer[LORAWAN_APP_DATA_MAX_SIZE];
 extern uint8_t AppDataSize;
 extern uint8_t AppPort;
 extern uint32_t TxDutyCycleTime;
@@ -46,10 +46,16 @@ extern bool KeepNet;
 extern enum eDeviceState_LoraWan DeviceState;
 
 class LoRaWanClass{
+private:
+  LoRaMacPrimitives_t LoRaMacPrimitive;
+  LoRaMacCallback_t LoRaMacCallbacks;
 public:
+  void Tick();
   void Init(DeviceClass_t CLASS,LoRaMacRegion_t REGION);
+  void Restore();
+  void Start();
   void Join();
-  void Send();
+  void Send(DeviceClass_t CLASS);
   void Cycle(uint32_t dutycycle);
   void Sleep();
   void Ifskipjoin();

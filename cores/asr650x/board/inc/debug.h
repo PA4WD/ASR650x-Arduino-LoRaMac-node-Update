@@ -56,7 +56,8 @@ extern "C" {
 #include <string.h>
 #include <stdio.h>
 #include "hw_conf.h"
-#include "timeServer.h"
+//#include "timeServer.h"
+#include "timer.h"
 #include "utilities.h"
 
 /* Exported types ------------------------------------------------------------*/

@@ -31,6 +31,7 @@
 #include "timer.h"
 #include "sx126x-board.h"
 #include "debug.h"
+#include "rtc-board.h"
 
 /*!
  * Antenna switch GPIO pins objects
@@ -308,7 +309,7 @@ bool SX126xCheckRfFrequency( uint32_t frequency )
 
 void BoardDisableIrq( void )
 {
-    CyGlobalIntDisable;    
+    CyGlobalIntDisable;
 }
 
 void BoardEnableIrq( void )
@@ -495,7 +496,7 @@ void BoardInitMcu( void )
 {
     SpiInit();
     Asr_Timer_Init();
-    RtcInit();
+    RtcBoardInit();
 
     pinMode(Vext,OUTPUT);
     digitalWrite(Vext,HIGH);

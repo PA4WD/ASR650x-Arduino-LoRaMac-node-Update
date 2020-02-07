@@ -15,6 +15,8 @@ extern "C" {
 enum eDeviceState_LoraWan
 {
     DEVICE_STATE_INIT,
+	DEVICE_STATE_RESTORE,
+	DEVICE_STATE_START,
     DEVICE_STATE_JOIN,
     DEVICE_STATE_SEND,
     DEVICE_STATE_CYCLE,
@@ -41,7 +43,6 @@ void SaveDr(void);
 bool CheckNetInfo(void);
 void NetInfoDisable(void);
 extern bool AT_user_check(char * cmd, char * content);
-
 
 
 #ifdef __cplusplus

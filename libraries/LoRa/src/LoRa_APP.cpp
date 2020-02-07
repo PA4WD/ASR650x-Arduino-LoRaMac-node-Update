@@ -2,7 +2,7 @@
 
 
 enum eDeviceState_Lora DeviceState_lora;
-extern uint8_t AppData[LORAWAN_APP_DATA_MAX_SIZE];
+extern uint8_t AppDataBuffer[LORAWAN_APP_DATA_MAX_SIZE];
 extern uint8_t AppDataSize;
 
 //Tx Power
@@ -80,7 +80,7 @@ void LoRaClass::Init(uint32_t freq, uint8_t power,uint32_t datarate)
 
 void LoRaClass::Send()
 {
-	Radio.Send( AppData, AppDataSize );
+	Radio.Send( AppDataBuffer, AppDataSize );
 }
 
 void LoRaClass::Receive()

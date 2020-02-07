@@ -1,7 +1,7 @@
 /*!
- * \file      delay-board.h
+ * \file      delay.h
  *
- * \brief     Target board delay implementation
+ * \brief     Delay implementation
  *
  * \copyright Revised BSD License, see section \ref LICENSE.
  *
@@ -19,11 +19,9 @@
  * \author    Miguel Luis ( Semtech )
  *
  * \author    Gregory Cristian ( Semtech )
- *
- * \author    Johannes Bruder ( STACKFORCE )
  */
-#ifndef __DELAY_BOARD_H__
-#define __DELAY_BOARD_H__
+#ifndef __DELAY_H__
+#define __DELAY_H__
 
 #ifdef __cplusplus
 extern "C"
@@ -32,15 +30,19 @@ extern "C"
 
 #include <stdint.h>
 
-/*!
- * \brief Blocking delay of "ms" milliseconds
- *
- * \param [IN] ms    delay in milliseconds
+/*! 
+ * Blocking delay of "s" seconds
  */
-void DelayMsMcu( uint32_t ms );
+void Delay( float s );
+
+/*! 
+ * Blocking delay of "ms" milliseconds
+ */
+void DelayMs( uint32_t ms );
 
 #ifdef __cplusplus
 }
 #endif
 
-#endif // __DELAY_BOARD_H__
+#endif // __DELAY_H__
+

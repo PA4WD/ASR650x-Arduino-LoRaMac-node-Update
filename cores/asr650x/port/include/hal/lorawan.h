@@ -14,7 +14,8 @@ extern "C" {
  *END***********************************************************************/
 #include <stdint.h>
 #include "base.h"
-#include "timeServer.h"
+//#include "timeServer.h"
+#include "timer.h"
 
 /*MACROS*********************************************************************
  *                          DATATYPE DEFINITIONS                    
